@@ -1,0 +1,7 @@
+{
+  "id": "03-sensors-and-perception",
+  "title": "Sensors and Perception",
+  "order": 3,
+  "readingTimeMinutes": 6,
+  "description": "How robots sense their environment using LiDAR, cameras, IMUs, and sensor fusion."
+}

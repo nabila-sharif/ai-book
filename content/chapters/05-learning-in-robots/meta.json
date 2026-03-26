@@ -1,0 +1,7 @@
+{
+  "id": "05-learning-in-robots",
+  "title": "Learning in Robots",
+  "order": 5,
+  "readingTimeMinutes": 7,
+  "description": "How robots learn through reinforcement learning, imitation learning, and sim-to-real transfer."
+}

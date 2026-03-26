@@ -1,0 +1,7 @@
+{
+  "id": "02-humanoid-anatomy",
+  "title": "Humanoid Anatomy",
+  "order": 2,
+  "readingTimeMinutes": 7,
+  "description": "The body structure of humanoid robots — joints, actuators, degrees of freedom, and power systems."
+}

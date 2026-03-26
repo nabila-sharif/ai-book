@@ -1,0 +1,544 @@
+openapi: "3.0.3"
+info:
+  title: AI-Native Textbook Platform API
+  version: "1.0.0"
+  description: |
+    Backend API for the Physical AI & Humanoid Robotics textbook platform.
+    All endpoints are prefixed with /api.
+    Phase 1 endpoints are public. Phase 2+ require a session cookie.
+servers:
+  - url: https://<railway-domain>/api
+    description: Production (Railway)
+  - url: http://localhost:3001/api
+    description: Local development
+
+# ─────────────────────────────────────────────
+# PHASE 1 — Public (Textbook + RAG)
+# ─────────────────────────────────────────────
+paths:
+  /chapters:
+    get:
+      summary: List all chapters
+      description: Returns ordered list of all chapter metadata (no content body).
+      operationId: listChapters
+      tags: [Chapters]
+      responses:
+        "200":
+          description: Chapter list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chapters:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChapterMeta"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /chapters/{id}:
+    get:
+      summary: Get chapter content
+      description: |
+        Returns the Markdown content for a chapter.
+        The `level` query param selects the content variant.
+        Unauthenticated requests default to `intermediate`.
+      operationId: getChapter
+      tags: [Chapters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "01-intro-to-physical-ai"
+        - name: level
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Level"
+      responses:
+        "200":
+          description: Chapter content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chapter"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/ServerError"
+
+  /chat:
+    post:
+      summary: Submit a RAG chatbot question
+      description: |
+        Embeds the question, retrieves top-5 relevant chunks from Qdrant,
+        and streams a Claude Haiku response with source citation.
+        If no relevant chunks found (cosine < 0.55), returns the fallback string.
+        Response is streamed as Server-Sent Events (SSE).
+      operationId: chat
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  minLength: 1
+                  maxLength: 500
+                  example: "What is sensor fusion in humanoid robots?"
+      responses:
+        "200":
+          description: Streamed SSE response
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE stream. Events:
+                    data: {"type":"delta","text":"..."} — incremental text
+                    data: {"type":"citation","text":"(Source: Chapter 3 — Sensor Fusion)"}
+                    data: {"type":"done"}
+                  On not-found:
+                    data: {"type":"not_found","text":"Answer not found in textbook"}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          description: Vector DB or AI service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+# ─────────────────────────────────────────────
+# PHASE 2 — Auth + Personalization
+# ─────────────────────────────────────────────
+
+  /auth/signup:
+    post:
+      summary: Create a new account
+      operationId: signup
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        "201":
+          description: Account created; session cookie set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                description: HTTP-only SameSite=Strict session cookie
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Email already registered (generic message to prevent enumeration)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/login:
+    post:
+      summary: Authenticate and start session
+      operationId: login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Authenticated; session cookie set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Invalid credentials (same message for wrong email or password)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /auth/logout:
+    post:
+      summary: Invalidate current session
+      operationId: logout
+      tags: [Auth]
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Session invalidated; cookie cleared
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /user/profile:
+    get:
+      summary: Get current user profile
+      operationId: getProfile
+      tags: [User]
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /user/level:
+    patch:
+      summary: Update learning level
+      operationId: updateLevel
+      tags: [User]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [level]
+              properties:
+                level:
+                  $ref: "#/components/schemas/Level"
+      responses:
+        "200":
+          description: Level updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+# ─────────────────────────────────────────────
+# PHASE 3 — Translation + Learning Tools
+# ─────────────────────────────────────────────
+
+  /translate:
+    post:
+      summary: Translate a chapter to Urdu
+      description: |
+        Calls Claude Haiku with a strict translation prompt.
+        Technical terms remain in English.
+        Response is streamed as SSE.
+        Client MUST cache result in localStorage.
+      operationId: translateChapter
+      tags: [Translation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chapter_id, level]
+              properties:
+                chapter_id:
+                  type: string
+                  example: "01-intro-to-physical-ai"
+                level:
+                  $ref: "#/components/schemas/Level"
+      responses:
+        "200":
+          description: Streamed Urdu translation (SSE)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE stream of translated Markdown chunks.
+                    data: {"type":"delta","text":"..."}
+                    data: {"type":"done"}
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          description: Translation service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /chapters/{id}/summary:
+    get:
+      summary: Get chapter summary
+      operationId: getChapterSummary
+      tags: [Learning Tools]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chapter summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Summary"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /chapters/{id}/quiz:
+    get:
+      summary: Get chapter quiz questions
+      operationId: getChapterQuiz
+      tags: [Learning Tools]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quiz questions (without correct answers)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizQuestions"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /chapters/{id}/quiz/submit:
+    post:
+      summary: Submit quiz answers
+      operationId: submitQuiz
+      tags: [Learning Tools]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  items:
+                    type: object
+                    required: [question_id, selected]
+                    properties:
+                      question_id:
+                        type: string
+                      selected:
+                        type: string
+                        description: Selected option key (A, B, C, or D)
+      responses:
+        "200":
+          description: Quiz results with correct answers and explanations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuizResults"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ─────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+
+  schemas:
+    Level:
+      type: string
+      enum: [beginner, intermediate, advanced]
+      default: intermediate
+
+    ChapterMeta:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "01-intro-to-physical-ai"
+        title:
+          type: string
+          example: "Introduction to Physical AI"
+        order:
+          type: integer
+          example: 1
+        readingTimeMinutes:
+          type: integer
+          example: 6
+        description:
+          type: string
+
+    Chapter:
+      allOf:
+        - $ref: "#/components/schemas/ChapterMeta"
+        - type: object
+          properties:
+            content:
+              type: string
+              description: Markdown content for the requested level
+            level:
+              $ref: "#/components/schemas/Level"
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        level:
+          $ref: "#/components/schemas/Level"
+        createdAt:
+          type: string
+          format: date-time
+
+    Summary:
+      type: object
+      properties:
+        chapter_id:
+          type: string
+        points:
+          type: array
+          minItems: 3
+          maxItems: 5
+          items:
+            type: string
+
+    QuizQuestions:
+      type: object
+      properties:
+        chapter_id:
+          type: string
+        questions:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              question:
+                type: string
+              options:
+                type: object
+                additionalProperties:
+                  type: string
+                description: Keys A, B, C, D
+
+    QuizResults:
+      type: object
+      properties:
+        score:
+          type: integer
+          description: Number of correct answers
+        total:
+          type: integer
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              question_id:
+                type: string
+              correct:
+                type: boolean
+              selected:
+                type: string
+              correct_answer:
+                type: string
+              explanation:
+                type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: "NOT_FOUND"
+            message:
+              type: string
+              example: "Chapter not found"
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

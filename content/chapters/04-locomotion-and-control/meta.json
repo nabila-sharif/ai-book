@@ -1,0 +1,7 @@
+{
+  "id": "04-locomotion-and-control",
+  "title": "Locomotion and Control",
+  "order": 4,
+  "readingTimeMinutes": 7,
+  "description": "Walking gaits, balance algorithms, trajectory planning, and real-time motion control."
+}
