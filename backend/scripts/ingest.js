@@ -52,9 +52,11 @@ function extractSection(text) {
   return match ? match[1].trim() : 'General';
 }
 
-/** Deterministic ID from chapter + section + chunk index. */
+/** Deterministic UUID from chapter + section + chunk index. */
 function makeId(chapterId, level, index) {
-  return createHash('sha1').update(`${chapterId}|${level}|${index}`).digest('hex').slice(0, 16);
+  const hex = createHash('sha1').update(`${chapterId}|${level}|${index}`).digest('hex');
+  // Format as UUID: 8-4-4-4-12
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
 }
 
 // ---------- main ------------------------------------------------------------

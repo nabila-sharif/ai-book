@@ -1,11 +1,11 @@
-import { HfInference } from '@huggingface/inference';
+import { InferenceClient } from '@huggingface/inference';
 
 const MODEL = 'sentence-transformers/all-MiniLM-L6-v2';
 
-let hf;
+let client;
 function getClient() {
-  if (!hf) hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
-  return hf;
+  if (!client) client = new InferenceClient(process.env.HUGGINGFACE_API_KEY);
+  return client;
 }
 
 /**
@@ -17,6 +17,7 @@ export async function embedText(text) {
   const result = await getClient().featureExtraction({
     model: MODEL,
     inputs: text,
+    provider: 'hf-inference',
   });
   // result may be nested array [[...]] for single input
   return Array.isArray(result[0]) ? result[0] : result;
@@ -31,6 +32,7 @@ export async function embedBatch(texts) {
   const result = await getClient().featureExtraction({
     model: MODEL,
     inputs: texts,
+    provider: 'hf-inference',
   });
   return result;
 }
