@@ -34,6 +34,6 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: { code: err.code || 'SERVER_ERROR', message } });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Backend running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
 });
