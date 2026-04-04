@@ -3,13 +3,23 @@ import express from 'express';
 import cors from 'cors';
 import chapterRoutes from './routes/chapters.js';
 import chatRoutes from './routes/chat.js';
+import authRoutes from './routes/auth.js';
+import userRoutes from './routes/user.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -17,6 +27,8 @@ app.use(express.json());
 // Routes
 app.use('/api/chapters', chapterRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

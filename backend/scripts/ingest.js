@@ -21,7 +21,7 @@ import { embedBatch } from '../src/services/embeddings.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONTENT_DIR = join(__dirname, '../../content/chapters');
-const LEVELS = ['intermediate']; // extend to ['beginner','intermediate','advanced'] once all variants exist
+const LEVELS = ['beginner', 'intermediate', 'advanced'];
 const CHUNK_SIZE = 1600;   // chars ≈ 400 tokens
 const OVERLAP = 300;       // chars ≈ 75 tokens
 const BATCH_SIZE = 32;
@@ -75,7 +75,7 @@ for (const chapterId of dirs) {
       continue; // skip missing variants
     }
 
-    const chunks = chunkText(raw);
+    const chunks = chunkText(raw.replace(/\r\n/g, '\n'));
     console.log(`  ${chapterId}/${level}: ${chunks.length} chunks`);
 
     // Embed in batches

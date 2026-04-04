@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { useApi } from '../../lib/api';
 import { ArrowLeftIcon, ArrowRightIcon, ClockIcon } from '../../components/Icons';
 import ReadingProgressBar from '../../components/ReadingProgressBar';
+import { useAuth } from '../../context/AuthContext';
 
 // --- Skeleton -------------------------------------------------
 
@@ -43,6 +44,8 @@ function ChapterSkeleton() {
 export default function ChapterPage() {
   const location = useLocation();
   const api = useApi();
+  const { user } = useAuth();
+  const level = user?.level || 'intermediate';
 
   const params = new URLSearchParams(location.search);
   const chapterId = params.get('id');
@@ -64,7 +67,7 @@ export default function ChapterPage() {
 
     try {
       const [chapterData, { chapters }] = await Promise.all([
-        api.getChapter(chapterId),
+        api.getChapter(chapterId, level),
         api.listChapters(),
       ]);
       setChapter(chapterData);
@@ -78,7 +81,7 @@ export default function ChapterPage() {
     } finally {
       setLoading(false);
     }
-  }, [chapterId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chapterId, level]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchChapter();
@@ -128,10 +131,15 @@ export default function ChapterPage() {
           <header className="chapter-header">
             <div className="chapter-number">Chapter {chapter.order}</div>
             <h1>{chapter.title}</h1>
-            <span className="chapter-reading-time">
-              <ClockIcon size={13} />
-              {chapter.readingTimeMinutes} min read
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="chapter-reading-time">
+                <ClockIcon size={13} />
+                {chapter.readingTimeMinutes} min read
+              </span>
+              <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: 4, background: 'var(--ifm-color-primary-lightest)', color: 'var(--ifm-color-primary-darkest)', textTransform: 'capitalize' }}>
+                {level}
+              </span>
+            </div>
           </header>
 
           {/* Body */}
